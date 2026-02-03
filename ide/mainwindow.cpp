@@ -4,6 +4,7 @@
 #include <QFileSystemModel>
 #include <QMessageBox>
 #include <QProcess>
+
 #include "mainwindow.h"
 #include "lpp_highlighter.h"
 #include "lpp_conf.h"
@@ -29,11 +30,56 @@ MainWindow::MainWindow(const LppConf& lpp_conf, QWidget *parent)
     fixed_font.setPointSize(14);
 
     ui->edtSourceCode->setFont(fixed_font);
+
+    // Leave only 1 tab open
+    ui->editorTabs->removeTab(1);
+
+    ui->editorTabs->setTabText(0, "Nuevo Programa");
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+/**
+ * Adds a new tab to the editor and saves its state in the openEditors map.
+ * @brief MainWindow::addNewEditor
+ * @param file
+ */
+void MainWindow::addNewEditor(QFile &file, QString &filePath)
+{
+    int realIndex = ui->editorTabs->count();
+
+    QWidget *tabPage = new QWidget();
+    QVBoxLayout *layout = new QVBoxLayout(tabPage);
+    layout->setContentsMargins(0, 0, 0, 0);
+
+    // Mover el editor al nuevo tab
+    layout->addWidget(ui->edtSourceCode);
+
+    LppEditorFile newEditor(
+        false,
+        QString::fromUtf8(file.readAll()),
+        filePath,
+        realIndex
+        );
+
+    QFileInfo info(filePath);
+    ui->editorTabs->addTab(tabPage, info.fileName());
+
+    openEditors[realIndex] = newEditor;
+
+    // Activar el tab recién creado
+    ui->editorTabs->setCurrentIndex(realIndex);
+}
+
+
+void MainWindow::updateEditorCode(QString& openedFile, std::string& contents)
+{
+    last_dir = QFileInfo(openedFile).dir().absolutePath();
+    ui->edtSourceCode->setPlainText(QString::fromStdString(contents));
+
 }
 
 void MainWindow::updateExplorerTreeView(QString filePath)
@@ -48,9 +94,6 @@ void MainWindow::updateExplorerTreeView(QString filePath)
     model->setNameFilters({ "*.lpp", "*.lppprj" });
     model->setNameFilterDisables(false);
 
-    qDebug() << "File Path: " << filePath << "\n";
-    qDebug() << "Dir: " << explorerPath << "\n";
-    qDebug() << "Model: " << model << "\n";
     ui->tvExplorer->setModel(model);
     ui->tvExplorer->setRootIndex(model->index(explorerPath));
 
@@ -128,6 +171,14 @@ void MainWindow::on_actionAbrir_triggered()
         return;
     }
 
+    // Clear all tabs
+
+    for (int i = 1; i < ui->editorTabs->count(); i++) {
+        ui->editorTabs->removeTab(i);
+    }
+
+    openEditors.clear();
+
     QString filepath = QFileDialog::getOpenFileName(
         this,
         "Seleccione un programa/proyecto",
@@ -137,13 +188,27 @@ void MainWindow::on_actionAbrir_triggered()
     if (!filepath.isEmpty()) {
         QFile file(filepath);
 
-        updateExplorerTreeView(filepath);
+        // Only update Explorer view if a new project is selected.
+        // Else, just add the new file to the editor but don't change the files/folders displayed in the tree view.
+        if (ui->tvExplorer->model() == nullptr && !filepath.endsWith(".llpprj")) {
+
+            QFileInfo info(filepath);
+
+            ui->editorTabs->setTabText(0, info.fileName());
+            updateExplorerTreeView(filepath);
+        }
+
+        addNewEditor(file, filepath);
+
         if (file.open(QFile::ReadOnly | QFile::Text)) {
             prg_filepath = filepath;
-            last_dir = QFileInfo(prg_filepath).dir().absolutePath();
-            ui->edtSourceCode->setPlainText(file.readAll());
+            std::string fileContents = file.readAll().toStdString();
+
+            updateEditorCode(prg_filepath, fileContents);
+            file.close();
 
             ui->edtSourceCode->document()->setModified(false);
+
         } else {
             QMessageBox::critical(this, "Error", "No se pudo abrir el archivo de programa");
         }
@@ -168,9 +233,13 @@ void MainWindow::on_actionGuardar_triggered()
         QFile file(prg_filepath);
 
         if (file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
-            file.write(ui->edtSourceCode->toPlainText().toUtf8());
+            QString fileContents = ui->edtSourceCode->toPlainText();
+            file.write(fileContents.toUtf8());
 
             ui->edtSourceCode->document()->setModified(false);
+            openEditors[ui->editorTabs->currentIndex()].setContents(fileContents);
+            openEditors[ui->editorTabs->currentIndex()].setIsModified(false);
+
         } else {
             QMessageBox::critical(this, "Error", "No se pudo guardar el programa");
         }
@@ -261,5 +330,69 @@ void MainWindow::on_actionCompilarPrg_triggered()
     ui->actionDetenerPrg->setEnabled(false);
 
     reportErrorMessage(lires);
+}
+
+
+/**
+ * Triggers when an item on the explorer's tree view was double clicked
+ * @brief MainWindow::on_tvExplorer_doubleClicked
+ * @param index
+ */
+void MainWindow::on_tvExplorer_doubleClicked(const QModelIndex &index)
+{
+    auto *model = qobject_cast<QFileSystemModel*>(ui->tvExplorer->model());
+    if (!model) {
+        return;
+    }
+
+    QString filePath = model->filePath(index);
+
+    qDebug() << "Double clicked element in tree view.\n";
+    // Ignorar directorios
+    if (model->isDir(index) || (!filePath.endsWith(".lpp") && !filePath.endsWith(".lppprj"))) {
+        qDebug() << "No apto para abrir :c\n";
+        return;
+    }
+
+    QFile file(filePath);
+    if (!file.open(QFile::ReadOnly | QFile::Text)) {
+        QMessageBox::critical(this, "Error",
+                              "No se pudo abrir el archivo");
+        return;
+    }
+
+    addNewEditor(file, filePath);
+    file.close();
+}
+
+
+/**
+ * Moves the editor widget (ui->edtSourceCode) to the new tab, saves old file state in its corresponsing object and updates source code with the new tab's state
+ * @brief MainWindow::on_editorTabs_currentChanged
+ * @param index
+ */
+void MainWindow::on_editorTabs_currentChanged(int index)
+{
+    QWidget *tab = ui->editorTabs->widget(index);
+
+    auto *tabLayout = tab->layout();
+    tabLayout->addWidget(ui->edtSourceCode);
+
+    std::string fileContents = openEditors[index].getContents().toStdString();
+    QString filePath = openEditors[index].getFilePath();
+    updateEditorCode(filePath, fileContents);
+}
+
+
+/**
+ * Save current editor state before changing tab
+ * @brief MainWindow::on_editorTabs_tabBarClicked
+ * @param index
+ */
+void MainWindow::on_editorTabs_tabBarClicked(int _)
+{
+    int currentIndex = ui->editorTabs->currentIndex();
+    openEditors[currentIndex].setContents(ui->edtSourceCode->toPlainText());
+    openEditors[currentIndex].setIsModified(ui->edtSourceCode->document()->isModified());
 }
 
