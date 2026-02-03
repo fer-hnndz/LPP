@@ -40,4 +40,4 @@
 *.user
 
 # VScode settings folder
-*/.vscode/*
+.vscode

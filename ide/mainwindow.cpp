@@ -1,6 +1,7 @@
 #include <QDebug>
 #include <iostream>
 #include <QFileDialog>
+#include <QFileSystemModel>
 #include <QMessageBox>
 #include <QProcess>
 #include "mainwindow.h"
@@ -33,6 +34,34 @@ MainWindow::MainWindow(const LppConf& lpp_conf, QWidget *parent)
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::updateExplorerTreeView(QString filePath)
+{
+    QFileSystemModel *model = new QFileSystemModel;
+    QDir dir(filePath);
+
+    dir.cdUp();
+    QString explorerPath = dir.absolutePath();
+    model->setRootPath(explorerPath);
+
+    model->setNameFilters({ "*.lpp", "*.lppprj" });
+    model->setNameFilterDisables(false);
+
+    qDebug() << "File Path: " << filePath << "\n";
+    qDebug() << "Dir: " << explorerPath << "\n";
+    qDebug() << "Model: " << model << "\n";
+    ui->tvExplorer->setModel(model);
+    ui->tvExplorer->setRootIndex(model->index(explorerPath));
+
+    // Run here since models need to be initialized for these functions to work.
+    ui->tvExplorer->hideColumn(1); // Size
+    ui->tvExplorer->hideColumn(2); // Type
+    ui->tvExplorer->hideColumn(3); // Date
+    ui->tvExplorer->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    ui->tvExplorer->setHeaderHidden(true);
+    ui->tvExplorer->setIndentation(16);
+    ui->tvExplorer->setAnimated(true);
 }
 
 bool MainWindow::saveProgramIfModified()
@@ -101,13 +130,14 @@ void MainWindow::on_actionAbrir_triggered()
 
     QString filepath = QFileDialog::getOpenFileName(
         this,
-        "Seleccione un programa",
+        "Seleccione un programa/proyecto",
         last_dir,
         "Programas de LPP (*.lpp);;Todos los archivos (*)");
 
     if (!filepath.isEmpty()) {
         QFile file(filepath);
 
+        updateExplorerTreeView(filepath);
         if (file.open(QFile::ReadOnly | QFile::Text)) {
             prg_filepath = filepath;
             last_dir = QFileInfo(prg_filepath).dir().absolutePath();

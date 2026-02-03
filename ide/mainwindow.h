@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QProcess>
+#include <QString>
 #include "lpp_conf.h"
 #include "lpp_interp_ctrl.h"
 
@@ -21,6 +22,7 @@ public:
     ~MainWindow();
 
 private:
+    void updateExplorerTreeView(QString filePath);
     bool saveProgramIfModified();
     void reportErrorMessage(LppInterpResult lires);
 

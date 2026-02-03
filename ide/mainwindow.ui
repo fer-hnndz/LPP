@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1100</width>
-    <height>650</height>
+    <width>1042</width>
+    <height>623</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -32,8 +32,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1100</width>
-     <height>22</height>
+     <width>1042</width>
+     <height>20</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuArchivo">
@@ -98,8 +98,11 @@
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <widget class="QDockWidget" name="dockWidget">
+   <property name="acceptDrops">
+    <bool>false</bool>
+   </property>
    <property name="allowedAreas">
-    <set>Qt::LeftDockWidgetArea</set>
+    <set>Qt::DockWidgetArea::LeftDockWidgetArea</set>
    </property>
    <attribute name="dockWidgetArea">
     <number>1</number>
@@ -107,7 +110,43 @@
    <widget class="QWidget" name="dockWidgetContents">
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
-      <widget class="QTreeView" name="tvSubprgs"/>
+      <widget class="QTabWidget" name="tabWidget">
+       <property name="currentIndex">
+        <number>0</number>
+       </property>
+       <widget class="QWidget" name="tabExplorer">
+        <attribute name="title">
+         <string>Explorador</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout">
+         <item>
+          <widget class="QTreeView" name="tvExplorer">
+           <property name="animated">
+            <bool>true</bool>
+           </property>
+           <attribute name="headerVisible">
+            <bool>false</bool>
+           </attribute>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="tabSubprgs">
+        <attribute name="title">
+         <string>Subprogramas</string>
+        </attribute>
+        <widget class="QTreeView" name="tvSubprgs">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>281</width>
+           <height>527</height>
+          </rect>
+         </property>
+        </widget>
+       </widget>
+      </widget>
      </item>
     </layout>
    </widget>
@@ -120,7 +159,7 @@
     <bool>false</bool>
    </property>
    <property name="allowedAreas">
-    <set>Qt::TopToolBarArea</set>
+    <set>Qt::ToolBarArea::TopToolBarArea</set>
    </property>
    <property name="iconSize">
     <size>
