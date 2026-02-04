@@ -42,6 +42,13 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::saveCurrentEditorState()
+{
+    int currentIndex = ui->editorTabs->currentIndex();
+    openEditors[currentIndex].setContents(ui->edtSourceCode->toPlainText());
+    openEditors[currentIndex].setIsModified(ui->edtSourceCode->document()->isModified());
+}
+
 /**
  * Adds a new tab to the editor and saves its state in the openEditors map.
  * @brief MainWindow::addNewEditor
@@ -49,29 +56,38 @@ MainWindow::~MainWindow()
  */
 void MainWindow::addNewEditor(QFile &file, QString &filePath)
 {
-    int realIndex = ui->editorTabs->count();
 
-    QWidget *tabPage = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(tabPage);
-    layout->setContentsMargins(0, 0, 0, 0);
-
-    // Mover el editor al nuevo tab
-    layout->addWidget(ui->edtSourceCode);
-
+    int tabIndex = ui->editorTabs->count();
     LppEditorFile newEditor(
         false,
         QString::fromUtf8(file.readAll()),
         filePath,
-        realIndex
-        );
+        tabIndex
+    );
 
+    // When there's only 1 tab, we
+    if (openEditors.empty()) {
+        qDebug() << "There are no open editors, editing first tab.\n";
+        newEditor.setTabIndex(0);
+        tabIndex = 0;
+    }
+
+
+    // Mover el editor al nuevo tab
     QFileInfo info(filePath);
-    ui->editorTabs->addTab(tabPage, info.fileName());
+    if (!openEditors.empty()) {
+            QWidget *tabPage = new QWidget();
+            QVBoxLayout *layout = new QVBoxLayout(tabPage);
+            layout->setContentsMargins(0, 0, 0, 0);
+            layout->addWidget(ui->edtSourceCode);
 
-    openEditors[realIndex] = newEditor;
+            ui->editorTabs->addTab(tabPage, info.fileName());
+    } else {
+        ui->editorTabs->setTabText(0, info.fileName());
+    }
 
-    // Activar el tab recién creado
-    ui->editorTabs->setCurrentIndex(realIndex);
+    openEditors[tabIndex] = newEditor;
+    ui->editorTabs->setCurrentIndex(tabIndex);
 }
 
 
@@ -171,14 +187,6 @@ void MainWindow::on_actionAbrir_triggered()
         return;
     }
 
-    // Clear all tabs
-
-    for (int i = 1; i < ui->editorTabs->count(); i++) {
-        ui->editorTabs->removeTab(i);
-    }
-
-    openEditors.clear();
-
     QString filepath = QFileDialog::getOpenFileName(
         this,
         "Seleccione un programa/proyecto",
@@ -188,13 +196,17 @@ void MainWindow::on_actionAbrir_triggered()
     if (!filepath.isEmpty()) {
         QFile file(filepath);
 
-        // Only update Explorer view if a new project is selected.
+        // Only update existing Explorer view if a new project is selected. If explorer is empty, always load it.
         // Else, just add the new file to the editor but don't change the files/folders displayed in the tree view.
-        if (ui->tvExplorer->model() == nullptr && !filepath.endsWith(".llpprj")) {
-
+        if (ui->tvExplorer->model() == nullptr || filepath.endsWith(".llpprj")) {
+            qDebug() << "User requested to open a project or there is no data on the explorer view. Loading a new explorer view and clearing all editors...\n";
             QFileInfo info(filepath);
 
-            ui->editorTabs->setTabText(0, info.fileName());
+            auto* tab = ui->editorTabs->widget(0);
+            auto* layout = tab->layout();
+            layout->addWidget(ui->edtSourceCode);
+
+            openEditors.clear();
             updateExplorerTreeView(filepath);
         }
 
@@ -340,6 +352,7 @@ void MainWindow::on_actionCompilarPrg_triggered()
  */
 void MainWindow::on_tvExplorer_doubleClicked(const QModelIndex &index)
 {
+    saveCurrentEditorState();
     auto *model = qobject_cast<QFileSystemModel*>(ui->tvExplorer->model());
     if (!model) {
         return;
@@ -391,8 +404,6 @@ void MainWindow::on_editorTabs_currentChanged(int index)
  */
 void MainWindow::on_editorTabs_tabBarClicked(int _)
 {
-    int currentIndex = ui->editorTabs->currentIndex();
-    openEditors[currentIndex].setContents(ui->edtSourceCode->toPlainText());
-    openEditors[currentIndex].setIsModified(ui->edtSourceCode->document()->isModified());
+    saveCurrentEditorState();
 }
 

@@ -23,6 +23,7 @@ public:
     ~MainWindow();
 
 private:
+    void saveCurrentEditorState();
     void addNewEditor(QFile& file, QString& path);
     void updateEditorCode(QString& openedFile, std::string& contents);
     void updateExplorerTreeView(QString filePath);
